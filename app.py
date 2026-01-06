@@ -3,7 +3,29 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from graph import app as brain
 from openai import OpenAI # On a besoin du client direct pour l'audio
 from rag_tool import retrieve_context_documents
+import streamlit as st
+import os
+# ... tes autres imports ...
 
+# 👇 AJOUTE CE BLOC ICI 👇
+# BOOTLOADER : Vérification de la base de données au démarrage
+CHROMA_PATH = "./chroma_db"
+
+if not os.path.exists(CHROMA_PATH):
+    # Si le dossier n'existe pas, on lance l'ingestion automatiquement
+    with st.spinner("🧠 Initialisation de la mémoire (Première exécution)..."):
+        # On importe ton script d'ingestion comme un module
+        import ingest
+        # On force la création de la DB
+        try:
+            ingest.ingest_documents()
+            st.success("✅ Mémoire construite avec succès !")
+        except Exception as e:
+            st.error(f"Erreur critique lors de l'ingestion : {e}")
+            st.stop()
+# 👆 FIN DU BLOC 👆
+
+# ... La suite de ton code (st.set_page_config, etc.) ...
 st.set_page_config(page_title="One For All", page_icon="♾️", layout="wide")
 
 # --- SIDEBAR : CONFIGURATION UTILISATEUR ---
