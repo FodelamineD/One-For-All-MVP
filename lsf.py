@@ -1,45 +1,40 @@
-# lsf.py - Dictionnaire corrigé (Liens stables)
+# lsf.py - Version "Liens Robustes"
 
 LSF_DICTIONARY = {
-    # BONJOUR (Signe de la main classique)
-    "bonjour": "https://media.tenor.com/gUACOHDzdJ0AAAAC/hello-sign-language.gif",
+    # BONJOUR (Waving hand simple)
+    "bonjour": "https://media.giphy.com/media/dzaUX7CAG0Ihi/giphy.gif",
+    "salut": "https://media.giphy.com/media/dzaUX7CAG0Ihi/giphy.gif",
     
-    # ARGENT (Frotter les doigts)
-    "argent": "https://media.tenor.com/n1j-rM6Jb7kAAAAC/pay-me-money.gif",
-    "payer": "https://media.tenor.com/n1j-rM6Jb7kAAAAC/pay-me-money.gif",
-    "aah": "https://media.tenor.com/n1j-rM6Jb7kAAAAC/pay-me-money.gif", # On triche pour la démo
+# ARGENT (Lien Donald Duck - Plus stable)
+    "argent": "https://media.giphy.com/media/xTiTnqUxyWbsAXq7Ju/giphy.gif",
+    "payer": "https://media.giphy.com/media/xTiTnqUxyWbsAXq7Ju/giphy.gif",
+    "aah": "https://media.giphy.com/media/xTiTnqUxyWbsAXq7Ju/giphy.gif",
     
-    # MAISON (Toit avec les mains)
-    "maison": "https://media.tenor.com/bQPz3YlKzLAAAAAC/house-home.gif",
-    "mdph": "https://media.tenor.com/bQPz3YlKzLAAAAAC/house-home.gif", # On associe MDPH à Maison
+    # MAISON (House)
+    "maison": "https://media.giphy.com/media/3o6Mb9OEV5Dbd5EwTu/giphy.gif",
+    "mdph": "https://media.giphy.com/media/3o6Mb9OEV5Dbd5EwTu/giphy.gif",
     
-    # MERCI (Main au menton)
-    "merci": "https://media.tenor.com/Qk2q5q4Wq1QAAAAC/thank-you-sign.gif",
+    # AIDER (Help sign)
+    "aider": "https://media.giphy.com/media/8Y5tBwbAxP3lpMq4jr/giphy.gif",
+    "aide": "https://media.giphy.com/media/8Y5tBwbAxP3lpMq4jr/giphy.gif",
     
-    # AIDER (Pouce levé sur paume)
-    "aider": "https://media.tenor.com/5S9s1Su1lAAAAAAC/help-asl.gif",
-    "aide": "https://media.tenor.com/5S9s1Su1lAAAAAAC/help-asl.gif",
+    # MERCI
+    "merci": "https://media.giphy.com/media/osjgQPWRx3cac/giphy.gif",
     
     # OUI / NON
-    "oui": "https://media.tenor.com/5JJz5f3Xwz0AAAAC/yes-nod.gif",
-    "non": "https://media.tenor.com/1M1S7K_7Gz0AAAAC/no-nope.gif"
+    "oui": "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif",
+    "non": "https://media.giphy.com/media/gnE4FF7Cf9rlS/giphy.gif"
 }
 
 def get_lsf_matches(text):
-    """
-    Scanne le texte et retourne la liste des (mot, url) trouvés.
-    """
     found = []
-    # Nettoyage agressif pour trouver les mots clés
+    # Nettoyage
     clean_text = text.lower().replace(".", " ").replace(",", " ").replace("'", " ")
     tokens = clean_text.split()
     
     for word in tokens:
-        # On garde le mot racine (ex: 'maisons' -> 'maison')
         root_word = word.rstrip('s') 
-        
         if root_word in LSF_DICTIONARY:
             found.append((root_word, LSF_DICTIONARY[root_word]))
             
-    # On dédoublonne pour ne pas afficher 3 fois le même GIF
     return list(set(found))
