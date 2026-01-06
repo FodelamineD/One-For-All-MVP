@@ -5,6 +5,7 @@ from openai import OpenAI # On a besoin du client direct pour l'audio
 from rag_tool import retrieve_context_documents
 import streamlit as st
 import os
+from utils import to_bionic_reading
 # ... tes autres imports ...
 
 # 👇 AJOUTE CE BLOC ICI 👇
@@ -25,8 +26,20 @@ if not os.path.exists(CHROMA_PATH):
             st.stop()
 # 👆 FIN DU BLOC 👆
 
-# ... La suite de ton code (st.set_page_config, etc.) ...
+# --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(page_title="One For All", page_icon="♾️", layout="wide")
+# CSS HACK : Renforce le gras pour le Bionic Reading
+st.markdown(
+    """
+    <style>
+    b {
+        font-weight: 900 !important; /* Gras ultra-lourd */
+        color: #FF4B4B; /* Optionnel : Met le début des mots en ROUGE Streamlit pour le test */
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # --- SIDEBAR : CONFIGURATION UTILISATEUR ---
 # --- SIDEBAR : CONFIGURATION & OUTILS ---
@@ -96,15 +109,20 @@ if final_user_input:
     st.chat_message("user").markdown(final_user_input)
     st.session_state.messages.append(HumanMessage(content=final_user_input))
 
-    # 2. LOGIQUE D'ADAPTATION (THE STYLIST)
+  # 2. LOGIQUE D'ADAPTATION (THE STYLIST)
     style_instruction = ""
     if handicap_mode == "FALC (Facile à Lire)":
-        style_instruction = "RÉPONDS EN FALC (Facile à Lire et à Comprendre) : Phrases courtes. Mots simples. Pas de jargon."
+       style_instruction = """
+        RÉPONDS EN FALC (Facile à Lire).
+        RÈGLE STRICTE : Si tu expliques une procédure par étapes, utilise ce format exact :
+        [ ] Étape 1 : ...
+        [ ] Étape 2 : ...
+        """
     elif handicap_mode == "TDAH (Focus & Gras)":
-        style_instruction = "ADAPTATION TDAH : Mets en **GRAS** les concepts clés. Structure aérée. Va droit au but."
+        # MODIFICATION ICI : On demande du texte brut pour que le Bionic Reading marche
+        style_instruction = "ADAPTATION TDAH : Fais des phrases courtes. IMPORTANT : N'utilise AUCUN gras ni formatage markdown. Donne juste le texte brut."
     elif handicap_mode == "Déficience Visuelle (Descriptif)":
         style_instruction = "ADAPTATION VISUELLE : Décris ce qui est visuel. Sois très explicite."
-    
     # 3. APPEL AU CERVEAU
     with st.spinner(f"Analyse & Adaptation ({handicap_mode})..."):
         # Injection du style
@@ -119,9 +137,35 @@ if final_user_input:
         from rag_tool import retrieve_context_documents
         sources = retrieve_context_documents(final_user_input)
 
-    # 4. AFFICHAGE DE LA RÉPONSE (Une seule fois !)
-    st.chat_message("assistant").markdown(ai_response.content)
     
+# 4. AFFICHAGE DE LA RÉPONSE
+
+    display_text = ai_response.content
+    
+    # --- FILTRE BIONIC READING (HTML MODE) ---
+    if handicap_mode == "TDAH (Focus & Gras)":
+        display_text = to_bionic_reading(display_text)
+        
+        # INJECTION CSS : On force le gras à être ROUGE pour le test
+        st.markdown(
+            """
+            <style>
+            b {
+                color: #D90429 !important; /* Rouge vif */
+                font-weight: 900 !important; /* Gras maximum */
+            }
+            </style>
+            """, 
+            unsafe_allow_html=True
+        )
+        
+        st.caption("⚡ Bionic Reading (Mode HTML)")
+        # On active le HTML pour que les balises <b> fonctionnent
+        st.chat_message("assistant").markdown(display_text, unsafe_allow_html=True)
+        
+    else:
+        # Affichage standard
+        st.chat_message("assistant").markdown(display_text)
     # 5. AFFICHAGE DES SOURCES
     if sources:
         with st.expander("📚 Sources officielles utilisées"):
