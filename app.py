@@ -6,6 +6,7 @@ from rag_tool import retrieve_context_documents
 import streamlit as st
 import os
 from utils import to_bionic_reading
+from lsf import get_lsf_matches
 # ... tes autres imports ...
 
 # 👇 AJOUTE CE BLOC ICI 👇
@@ -50,7 +51,7 @@ with st.sidebar:
     # 1. Choix du Handicap
     handicap_mode = st.radio(
         "Mode d'adaptation :",
-        ["Standard", "FALC (Facile à Lire)", "TDAH (Focus & Gras)", "Déficience Visuelle (Descriptif)"]
+        ["Standard", "FALC (Facile à Lire)", "TDAH (Focus & Gras)", "Déficience Visuelle (Descriptif)", "Sourd (LSF & Visuel)"]
     )
     st.info(f"Mode activé : **{handicap_mode}**")
     
@@ -104,90 +105,85 @@ elif text_input:
     # Sinon on prend le texte
     final_user_input = text_input
     
+
+# --- DÉCLENCHEMENT DU CERVEAU ---
 if final_user_input:
-    # 1. On affiche et sauvegarde le message USER
+    # 1. On affiche le message USER
     st.chat_message("user").markdown(final_user_input)
     st.session_state.messages.append(HumanMessage(content=final_user_input))
 
-  # 2. LOGIQUE D'ADAPTATION (THE STYLIST)
+    # 2. DÉFINITION DU STYLE
     style_instruction = ""
     if handicap_mode == "FALC (Facile à Lire)":
-       style_instruction = """
-        RÉPONDS EN FALC (Facile à Lire).
-        RÈGLE STRICTE : Si tu expliques une procédure par étapes, utilise ce format exact :
-        [ ] Étape 1 : ...
-        [ ] Étape 2 : ...
+        style_instruction = """
+        RÉPONDS EN FALC.
+        RÈGLE : Utilise des phrases courtes.
+        Si procédure : [ ] Étape 1...
         """
     elif handicap_mode == "TDAH (Focus & Gras)":
-        # MODIFICATION ICI : On demande du texte brut pour que le Bionic Reading marche
-        style_instruction = "ADAPTATION TDAH : Fais des phrases courtes. IMPORTANT : N'utilise AUCUN gras ni formatage markdown. Donne juste le texte brut."
+        style_instruction = "ADAPTATION TDAH : Phrases courtes. AUCUN GRAS NI MARKDOWN. Texte brut uniquement."
     elif handicap_mode == "Déficience Visuelle (Descriptif)":
-        style_instruction = "ADAPTATION VISUELLE : Décris ce qui est visuel. Sois très explicite."
-    # 3. APPEL AU CERVEAU
+        style_instruction = "ADAPTATION VISUELLE : Décris le visuel. Sois explicite."
+    elif handicap_mode == "Sourd (LSF & Visuel)":
+        style_instruction = "ADAPTATION SOURD : Français simple (Sujet-Verbe-Complément). Pas de métaphores."
+
+    # 3. APPEL DU CERVEAU (C'est ici qu'on crée ai_response)
     with st.spinner(f"Analyse & Adaptation ({handicap_mode})..."):
-        # Injection du style
+        # Prompt système temporaire
         system_prompt = SystemMessage(content=f"INSTRUCTION DE STYLE : {style_instruction}")
         input_messages = [system_prompt] + st.session_state.messages
         
-        # Le Cerveau réfléchit
+        # Le Graphe réfléchit
         result = brain.invoke({"messages": input_messages})
-        ai_response = result["messages"][-1]
+        ai_response = result["messages"][-1] # <--- C'est là qu'elle naît !
         
-        # Récupération des sources (Hack MVP)
+        # Récupération des sources
         from rag_tool import retrieve_context_documents
         sources = retrieve_context_documents(final_user_input)
 
-    
-# 4. AFFICHAGE DE LA RÉPONSE
-
+    # 4. AFFICHAGE DE LA RÉPONSE (Maintenant ai_response existe)
     display_text = ai_response.content
     
-    # --- FILTRE BIONIC READING (HTML MODE) ---
+    # A. Mode Bionic (HTML)
     if handicap_mode == "TDAH (Focus & Gras)":
         display_text = to_bionic_reading(display_text)
-        
-        # INJECTION CSS : On force le gras à être ROUGE pour le test
-        st.markdown(
-            """
-            <style>
-            b {
-                color: #D90429 !important; /* Rouge vif */
-                font-weight: 900 !important; /* Gras maximum */
-            }
-            </style>
-            """, 
-            unsafe_allow_html=True
-        )
-        
+        st.markdown("""<style>b { color: #D90429 !important; font-weight: 900 !important; }</style>""", unsafe_allow_html=True)
         st.caption("⚡ Bionic Reading (Mode HTML)")
-        # On active le HTML pour que les balises <b> fonctionnent
         st.chat_message("assistant").markdown(display_text, unsafe_allow_html=True)
-        
     else:
-        # Affichage standard
+        # B. Mode Standard
         st.chat_message("assistant").markdown(display_text)
-    # 5. AFFICHAGE DES SOURCES
-    if sources:
-        with st.expander("📚 Sources officielles utilisées"):
-            for doc in sources:
-                source_name = doc.metadata.get('source', 'Inconnu').split('/')[-1]
-                page_num = doc.metadata.get('page', '?')
-                st.caption(f"📄 **{source_name}** (Page {page_num})")
-                st.text(doc.page_content[:150] + "...")
 
-    # 6. SAUVEGARDE EN MÉMOIRE
+    # 5. BONUS : LSF (Langue des Signes)
+    if handicap_mode == "Sourd (LSF & Visuel)":
+        matches = get_lsf_matches(ai_response.content)
+        if matches:
+            with st.expander("👋 Traduction LSF (Mots-clés)", expanded=True):
+                cols = st.columns(3)
+                for i, (word, url) in enumerate(matches):
+                    with cols[i % 3]:
+                        st.image(url, use_container_width=True)
+                        st.markdown(f"**{word.capitalize()}**")
+        else:
+            st.info("👋 Aucun mot-clé LSF détecté.")
+
+    # 6. BONUS : SOURCES
+    if sources:
+        with st.expander("📚 Sources officielles"):
+            for doc in sources:
+                name = doc.metadata.get('source', 'Doc').split('/')[-1]
+                page = doc.metadata.get('page', '?')
+                st.caption(f"📄 {name} (p.{page})")
+
+    # 7. SAUVEGARDE ET AUDIO
     st.session_state.messages.append(ai_response)
 
-    # 7. GÉNÉRATION AUDIO (TTS)
-    client = OpenAI()
-    try:
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice="alloy",
-            input=ai_response.content[:4096] 
-        )
-        audio_file = "speech.mp3"
-        response.stream_to_file(audio_file)
-        st.audio(audio_file, format="audio/mp3", start_time=0)
-    except Exception as e:
-        st.warning(f"Audio non disponible : {e}")
+    # On génère l'audio (sauf pour les sourds, inutile)
+    if handicap_mode != "Sourd (LSF & Visuel)":
+        client = OpenAI()
+        try:
+            tts = client.audio.speech.create(model="tts-1", voice="alloy", input=ai_response.content[:4096])
+            tts.stream_to_file("speech.mp3")
+            st.audio("speech.mp3", start_time=0)
+        except:
+            pass
