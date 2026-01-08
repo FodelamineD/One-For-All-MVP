@@ -1,96 +1,53 @@
 import os
 from dotenv import load_dotenv
-from typing import Annotated
+from typing import Annotated, Literal
 from typing_extensions import TypedDict
+
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langgraph.prebuilt import ToolNode, tools_condition # La magie est ici
 
-# Import de ton outil RAG
-from rag_tool import retrieve_context
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage
+from tools import ALL_TOOLS # On importe ta boîte à outils
 
 load_dotenv()
 
-# 1. DÉFINITION DE LA MÉMOIRE (STATE)
-# C'est ici qu'on stocke toute la conversation
+# 1. DÉFINITION DE L'ÉTAT (STATE)
 class State(TypedDict):
-    # "add_messages" permet d'ajouter les nouveaux messages à la liste existante (append)
     messages: Annotated[list, add_messages]
 
-# ... (Tes imports restent pareils)
+# 2. INITIALISATION DU MODÈLE AVEC OUTILS
+# On dit au LLM : "Voici tes outils, utilise-les si besoin."
+llm = ChatOpenAI(model="gpt-4o") # On prend le gros modèle pour qu'il soit malin
+llm_with_tools = llm.bind_tools(ALL_TOOLS)
 
-def chatbot_node(state: State):
-    llm = ChatOpenAI(model="gpt-4o-mini")
-    
-    # On récupère le dernier message
-    last_message = state["messages"][-1].content
-    
-    # On récupère le profil utilisateur s'il existe (sinon défaut)
-    # LangGraph stocke tout dans le state, on va tricher un peu pour le MVP
-    # et l'injecter via le SystemPrompt direct.
-    
-    context = retrieve_context(last_message)
-    
-    # 🚨 LA NOUVEAUTÉ EST ICI : LE PROMPT DYNAMIQUE
-    # On définit comment l'IA doit parler selon le profil choisi dans l'UI
-    # (Note: Dans une version V2, ce serait passé proprement dans le state)
-    user_profile = "Standard" 
-    # Petite astuce : on va choper le profil depuis le dernier message humain 
-    # s'il contient une méta-data (hack MVP) ou on le laisse générique.
-    # Pour l'instant, on va gérer ça dans le Prompt Template directement.
+# 3. LE NOEUD "AGENT" (Le Décideur)
+def agent_node(state: State):
+    # L'agent reçoit l'historique et décide quoi faire (Parler ou Appeler un outil)
+    return {"messages": [llm_with_tools.invoke(state["messages"])]}
 
-    prompt = f"""
-    Tu es l'assistant One For All.
-    
-    CONTEXTE DOCUMENTAIRE :
-    {context}
-    
-    CONSIGNES D'ADAPTATION :
-    - Si l'utilisateur demande du FALC (Facile à Lire), fais des phrases courtes, mots simples, listes à puces.
-    - Si l'utilisateur a un TDAH, mets en GRAS les mots clés importants et sois ultra-concis.
-    - Sinon, réponds normalement mais poliment.
-    
-    Réponds à la question en utilisant le contexte. Si tu ne sais pas, dis-le.
-    """
-    
-    messages = [SystemMessage(content=prompt)] + state["messages"]
-    response = llm.invoke(messages)
-    
-    return {"messages": [response]}
-
-# 3. CONSTRUCTION DU GRAPHE
+# 4. CONSTRUCTION DU GRAPHE
 workflow = StateGraph(State)
 
-# On ajoute notre noeud unique
-workflow.add_node("chatbot", chatbot_node)
+# Node 1 : L'Agent (Cerveau)
+workflow.add_node("agent", agent_node)
+# Node 2 : L'Exécuteur d'Outils (C'est LangGraph qui gère l'exécution technique)
+workflow.add_node("tools", ToolNode(ALL_TOOLS))
 
-# On définit le flux : Début -> Chatbot -> Fin
-workflow.add_edge(START, "chatbot")
-workflow.add_edge("chatbot", END)
+# LE ROUTING INTELLIGENT
+workflow.add_edge(START, "agent")
 
-# On compile le cerveau
+# Conditionnelle :
+# Si l'agent a décidé d'appeler un outil -> On va vers "tools"
+# Si l'agent a juste répondu (texte) -> On va vers END
+workflow.add_conditional_edges(
+    "agent",
+    tools_condition,
+)
+
+# Après avoir exécuté un outil, on revient TOUJOURS à l'agent pour qu'il analyse le résultat
+workflow.add_edge("tools", "agent")
+
+# Compile
 app = workflow.compile()
-
-# ==========================================
-# TEST RAPIDE (Simulation de conversation)
-# ==========================================
-if __name__ == "__main__":
-    print("🧠 Démarrage du Cerveau LangGraph...")
-    
-    # Simulation d'un utilisateur qui pose 2 questions à la suite
-    inputs = {"messages": [HumanMessage(content="Quelles sont les conditions de l'AAH ?")]}
-    
-    # 1ère réponse
-    print("\n--- Tour 1 ---")
-    for event in app.stream(inputs):
-        for value in event.values():
-            print("🤖 Agent:", value["messages"][-1].content)
-            
-    # On simule la mémoire en gardant l'état (dans la vraie vie, l'interface gérera ça)
-    # Pour ce test simple, on lance juste une 2ème question indépendante pour vérifier que ça ne plante pas
-    print("\n--- Tour 2 ---")
-    inputs2 = {"messages": [HumanMessage(content="Et pour la MDPH, je fais comment ?")]}
-    for event in app.stream(inputs2):
-        for value in event.values():
-            print("🤖 Agent:", value["messages"][-1].content)
