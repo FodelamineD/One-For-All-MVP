@@ -127,32 +127,24 @@ if audio_value:
 elif text_input:
     final_user_input = text_input
 
-# --- 6. LE CŒUR DU SYSTÈME (Nouvelle entrée Texte/Audio) ---
 # --- 6. LE CŒUR DU SYSTÈME ---
 if final_user_input:
-    # 🛡️ ANTI-DOUBLON (DEDUP)
-    # On récupère le dernier message envoyé par l'HUMAIN dans l'historique
+    # 🛡️ ANTI-DOUBLON
     last_human_msg = None
     for msg in reversed(st.session_state.messages):
         if isinstance(msg, HumanMessage):
             last_human_msg = msg.content
             break
-            
-    # Si le message actuel est IDENTIQUE au dernier message humain, on stop tout.
-    # C'est juste un rafraîchissement de page, pas une nouvelle question.
+    
     if last_human_msg == final_user_input:
-        # On ne fait RIEN, on laisse le script continuer sans ré-ajouter le message
-        pass
-        
+        pass # On ignore le doublon
     else:
-        # C'est un VRAI nouveau message -> ON TRAITE
-        
         # A. Affichage USER
         st.session_state.messages.append(HumanMessage(content=final_user_input))
         with st.chat_message("user"):
             st.markdown(final_user_input)
 
-        # B. DÉFINITION DU STYLE
+        # B. DÉFINITION DU STYLE (C'EST ICI QUE ÇA MANQUAIT)
         style_instruction = ""
         if handicap_mode == "FALC (Facile à Lire)":
             style_instruction = "RÉPONDS EN FALC. Phrases courtes. Listes à puces. Vocabulaire simple."
@@ -163,32 +155,30 @@ if final_user_input:
         elif handicap_mode == "Sourd (LSF & Visuel)":
             style_instruction = "ADAPTATION SOURD : Français simple (Sujet-Verbe-Complément). Pas de métaphores."
 
-       
-        # C. REFLEXION
-    with st.spinner(f"Analyse & Adaptation ({handicap_mode})..."):
-        # 🔥 ON AJOUTE LA CONSCIENCE DE L'INTERFACE ICI
-        interface_context = """
-        CONTEXTE INTERFACE :
-        Tu es l'assistant "One For All" intégré dans une application.
-        - Tu as un onglet '📸 Vision' dans la barre latérale (à gauche) capable de lire/scanner des courriers via OCR.
-        - Tu as un onglet '🎙️ Vocal' pour l'audio.
-        
-        RÈGLE DE COMPORTEMENT :
-        Si l'utilisateur dit "Je veux te montrer un fichier" ou "Lis ce document", NE DIS PAS que tu ne peux pas.
-        DIS-LUI : "Allez dans l'onglet 📸 Vision à gauche et chargez votre image."
-        """
-        
-        # On fusionne le contexte technique + le style (TDAH/FALC)
-        full_system_prompt = f"{interface_context}\n\nINSTRUCTION DE STYLE : {style_instruction}"
-        
-        system_msg = SystemMessage(content=full_system_prompt)
-        input_messages = [system_msg] + st.session_state.messages
-        
-        # Le Graphe réfléchit
-        result = brain.invoke({"messages": input_messages})
-        ai_response = result["messages"][-1]
-        
-        sources = retrieve_context_documents(final_user_input)
+        # C. REFLEXION (Avec Conscience + Style)
+        with st.spinner(f"Analyse & Adaptation ({handicap_mode})..."):
+            
+            # 1. Le Prompt "Conscience" (Pour qu'il sache qu'il a la Vision)
+            interface_context = """
+            CONTEXTE INTERFACE :
+            Tu es l'assistant "One For All".
+            - Tu as un onglet '📸 Vision' à gauche capable de lire des courriers.
+            - Tu as un onglet '🎙️ Vocal' pour l'audio.
+            
+            RÈGLE : Si l'utilisateur veut montrer un document, dis-lui d'utiliser l'onglet '📸 Vision'.
+            """
+            
+            # 2. On combine Conscience + Style (Maintenant style_instruction existe !)
+            full_system_prompt = f"{interface_context}\n\nINSTRUCTION DE STYLE : {style_instruction}"
+            
+            system_msg = SystemMessage(content=full_system_prompt)
+            input_messages = [system_msg] + st.session_state.messages
+            
+            # 3. Appel Cerveau
+            result = brain.invoke({"messages": input_messages})
+            ai_response = result["messages"][-1]
+            
+            sources = retrieve_context_documents(final_user_input)
 
         # D. AFFICHAGE RÉPONSE
         display_text = ai_response.content
