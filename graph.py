@@ -9,7 +9,8 @@ from langgraph.prebuilt import ToolNode, tools_condition # La magie est ici
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage
-from tools import ALL_TOOLS # On importe ta boîte à outils
+from tools import ALL_TOOLS # On importe ta boîte à outils*
+
 
 load_dotenv()
 
