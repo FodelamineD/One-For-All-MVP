@@ -9,6 +9,7 @@ import os
 from vision import analyze_image
 from profiler import detect_profile
 from exporter import generate_pdf # Import remonté ici pour être propre
+from personas import get_persona
 
 # 1. CONFIGURATION DE LA PAGE
 st.set_page_config(page_title="One For All", page_icon="🛡️", layout="wide")
@@ -171,25 +172,37 @@ if final_user_input:
         elif handicap_mode == "Sourd (LSF & Visuel)":
             style_instruction = "ADAPTATION SOURD : Français simple (Sujet-Verbe-Complément). Pas de métaphores."
 
-        # C. REFLEXION
+# C. REFLEXION
         with st.spinner(f"Analyse & Adaptation ({handicap_mode})..."):
+            # 1. On récupère le style
+            from personas import get_persona # Import local pour être sûr
+            style_instruction = get_persona(handicap_mode)
+            
+            # 2. Conscience Interface
             interface_context = """
             CONTEXTE INTERFACE :
             Tu es l'assistant "One For All".
             - Tu as un onglet '📸 Vision' à gauche.
             - Tu as un onglet '🎙️ Vocal'.
             RÈGLE : Si l'utilisateur veut montrer un document, dis-lui d'utiliser l'onglet '📸 Vision'.
+            RÈGLE 2 : Si le document est déjà analysé dans l'historique, réponds directement sans demander d'upload.
             """
+            
+            # 3. Fusion
             full_system_prompt = f"{interface_context}\n\nINSTRUCTION DE STYLE : {style_instruction}"
             system_msg = SystemMessage(content=full_system_prompt)
             input_messages = [system_msg] + st.session_state.messages
             
+            # 4. EXECUTION CERVEAU
             result = brain.invoke({"messages": input_messages})
-            ai_response = result["messages"][-1]
+            ai_response = result["messages"][-1] # <--- CRÉATION DE LA VARIABLE
+            
             sources = retrieve_context_documents(final_user_input)
 
-        # D. AFFICHAGE RÉPONSE
+        # D. AFFICHAGE RÉPONSE (DOIT ÊTRE ALIGNÉ AVEC LE 'with', PAS DEDANS)
+        # Mais comme ai_response est défini dans le with, elle est dispo ici tant que le with n'a pas crashé.
         display_text = ai_response.content
+        
         with st.chat_message("assistant"):
             if handicap_mode == "TDAH (Focus & Gras)":
                 display_text = to_bionic_reading(display_text)
